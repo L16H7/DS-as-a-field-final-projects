@@ -1,0 +1,214 @@
+# NYPD Shooting Incident Data
+
+---
+title: "NYPD Shooting Incident Data"
+author: "Lin Myat Ko"
+date: "2023-09-06"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+## Data Loading
+
+```{r}
+df <- read_csv("./NYPD/NYPD_Shooting_Incident_Data__Historic_.csv")
+```
+
+## Summary Statistics
+
+```{r}
+summary(df)
+```
+
+## Data Visualization
+
+### 1. Most Risky Hour of the Day
+
+Let's explore the OCCUR TIME. I want to find out which are the riskiest hours. The intuition is it is safer in the daytime at night.
+
+```{r fig.width=12, fig.height=8}
+breaks_hours <- seq(0, 23, 1)
+labels_hours <- c("12 AM", paste0(seq(1, 11, 1), " AM"), "12 PM", paste0(seq(1, 11, 1), " PM"))
+
+
+df$hour <- hour(hms(df$OCCUR_TIME))
+
+ggplot(df, aes(x = hour)) +
+  geom_histogram(binwidth = 1, fill = "blue", alpha = 0.7, color = "black") +
+  labs(title = "Most risky time of the day",
+       x = "Time of the day",
+       y = "Shootings") +
+  scale_x_continuous(breaks = breaks_hours, labels = labels_hours) +
+  theme_minimal()
+
+```
+
+So, our intuition is backed by the data.
+
+### 2. Day of the Week
+
+Next, I want to determine the safest day of the week.
+
+This is going to be tricky because we do not have the day of the week in data. However, we can calculate day of the week from date.
+
+```{r fig.width=12, fig.height=8}
+df$weekday <- wday(as.Date(df$OCCUR_DATE, format = "%m/%d/%Y"), label = TRUE)
+
+df$weekday <- factor(df$weekday, levels = c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))
+
+ggplot(df, aes(x = weekday)) +
+  geom_bar(fill = "blue", alpha = 0.7, color = "black") +
+  labs(title = "Shootings by day of the week",
+       x = "Day of the week",
+       y = "Frequency") +
+  theme_minimal()
+
+
+```
+
+This is interesting to see Wednesday is the safest compared to the weekend.
+
+### 3. Distribution of races
+
+Let us explore the races involved. I will print the statistics.
+
+```{r fig.width=12, fig.height=8}
+ggplot(df, aes(x = VIC_RACE)) +
+  geom_bar(fill = "red", alpha = 0.7, color = "black") +
+  labs(title = "Victim by race",
+       x = "Race",
+       y = "Number") +
+  theme_minimal()
+```
+
+#### The numbers are too different so I will use LOG SCALE to compare victim and **perpetrator** distributions.
+
+```{r fig.width=12, fig.height=8}
+ggplot(df, aes(x = VIC_RACE)) +
+  geom_bar(fill = "red", alpha = 0.7, color = "black") +
+  labs(title = "Victim by race (LOG SCALE)",
+       x = "Race",
+       y = "LOG SCALE") +
+  scale_y_log10() +
+  theme_minimal()
+```
+
+```{r fig.width=12, fig.height=8}
+ggplot(df, aes(x = PERP_RACE)) +
+  geom_bar(fill = "black", alpha = 0.7, color = "black") +
+  labs(title = "Perpetrator by race (LOG SCALE)",
+       x = "Race",
+       y = "LOG SCALE") +
+  scale_y_log10() +
+  theme_minimal()
+```
+
+I cannot help but feel that data is biased.
+
+### 4. Distributions of Victim Races by District
+
+Let's explore the distributions of races by districts are equal.
+
+```{r fig.width=12, fig.height=8}
+library(ggplot2)
+
+ggplot(df, aes(x = VIC_RACE)) +
+  geom_histogram(stat = "count", aes(fill = VIC_RACE), position = "dodge") +
+  facet_wrap(~ BORO) +
+  scale_y_log10() +
+  ylab("Frequency (Log Scale)") +
+  ggtitle("Distribution of Races by District (Log Scale)") +
+  theme_minimal() +
+  theme(axis.text.x=element_blank())
+
+```
+
+We can see that all districts are more of less similarly distributed.
+
+### 5. Distributions of Victim Age Group by District
+
+```{r}
+df <- df[!(df$VIC_AGE_GROUP == "UNKNOWN" | df$VIC_AGE_GROUP == 1022),]
+ggplot(df, aes(x = VIC_AGE_GROUP)) +
+  geom_histogram(stat = "count", aes(fill = VIC_AGE_GROUP), position = "dodge") +
+  facet_wrap(~ BORO) +
+  scale_y_log10() +
+  ylab("Frequency (Log Scale)") +
+  ggtitle("Distribution of Age Group by District (Log Scale)") +
+  theme_minimal() +
+  theme(axis.text.x=element_blank()) 
+```
+
+They all seem to distribute similarly.
+
+## Modelling
+
+I want to do logistic regression statistical murder flag. I will handpick the features I want to explore.
+
+OCCUR_TIME, PRECINT, PERP_AGE_GROUP, PERP_SEX, PERP_RACE, VIC_AGE_GROUP, VIC_SEX, VIC_RACE
+
+### Data Cleaning
+
+```{r}
+model_df <- df[, c("OCCUR_TIME", "PRECINCT", "PERP_AGE_GROUP", "PERP_SEX", "PERP_RACE", "VIC_AGE_GROUP", "VIC_SEX", "VIC_RACE", "STATISTICAL_MURDER_FLAG")]
+
+model_df <- na.omit(model_df)
+model_df <- model_df[!apply(model_df == "UNKNOWN", 1, any), ]
+
+model_df$TIME_OF_DAY <- factor(hour(hms(model_df$OCCUR_TIME)))
+```
+
+```{r}
+model_df[] <- lapply(model_df, factor)
+```
+
+```{r}
+table(model_df$STATISTICAL_MURDER_FLAG)
+```
+
+But the data is imbalanced so, I will sample 3000 from FALSE.
+
+I will handpick the features I want to explore.
+
+### Feature Selection
+
+OCCUR_TIME, PRECINT, PERP_AGE_GROUP, PERP_SEX, PERP_RACE, VIC_AGE_GROUP, VIC_SEX, VIC_RACE
+
+```{r}
+sampled_df <- model_df %>%
+  group_by(STATISTICAL_MURDER_FLAG) %>%
+  sample_n(3000, replace = FALSE) %>%
+  ungroup()
+
+```
+
+```{r}
+set.seed(123)
+sample <- sample(c(TRUE, FALSE), nrow(sampled_df), replace=TRUE, prob=c(0.8,0.2))
+train  <- sampled_df[sample, ]
+test   <- sampled_df[!sample, ]
+
+
+```
+
+```{r}
+model = glm(STATISTICAL_MURDER_FLAG ~ PRECINCT + PERP_AGE_GROUP + PERP_SEX + PERP_RACE + VIC_AGE_GROUP + VIC_SEX + VIC_RACE + TIME_OF_DAY, data = train, family = binomial)
+```
+
+```{r}
+predictions = predict(model, newdata = test, type = "response")
+```
+
+```{r}
+predicted_labels = ifelse(predictions > 0.5, TRUE, FALSE)
+
+library(caret)
+confusionMatrix(as.factor(predicted_labels), as.factor(test$STATISTICAL_MURDER_FLAG))
+```
+
+### Conclusion
+
+So, the model accuracy is bad. So, I think it's safe to conclude that the NYPD determine statistical murder flag by some kinds of private data. In the future, I will research more about how data scientists are looking at this kind of data.
