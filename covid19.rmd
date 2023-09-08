@@ -23,7 +23,7 @@ Here is the link for the data. <https://github.com/CSSEGISandData/COVID-19>
 
 ```{r}
 df_confirmed = read_csv("./time_series_covid19_confirmed_global.csv")
-head(df_confirmed)
+#head(df_confirmed)
 ```
 
 ## Data Visualization
@@ -49,7 +49,7 @@ g7_df_confirmed_aggregate <- aggregate(. ~ country, g7_df_confirmed, sum)
 ```
 
 ```{r}
-head(g7_df_confirmed_aggregate)
+#head(g7_df_confirmed_aggregate)
 ```
 
 Create pivot to be visualized as line plot
@@ -64,7 +64,7 @@ g7_df_confirmed_aggregate_pivot <- g7_df_confirmed_aggregate %>%
 
 # Covert the day column to date object
 g7_df_confirmed_aggregate_pivot$date <- as.Date(g7_df_confirmed_aggregate_pivot$date, format="%m/%d/%y")
-head(g7_df_confirmed_aggregate_pivot)
+#head(g7_df_confirmed_aggregate_pivot)
 ```
 
 ```{r fig.width=12, fig.height=4}
@@ -137,7 +137,7 @@ ggplot(df_moving_avg, aes(x = date, y = cases)) +
 
 ```{r}
 df_death = read_csv("./time_series_covid19_deaths_global.csv")
-head(df_death)
+#head(df_death)
 
 ```
 
@@ -150,14 +150,14 @@ selected_countries <- c("Canada", "France", "Germany", "Italy", "Japan", "United
 g7_df_death <- df_death %>% filter(`Country/Region` %in% selected_countries)
 
 g7_df_death <- g7_df_death %>% rename(country = `Country/Region`)
-head(g7_df_death)
-View(g7_df_death)
+#head(g7_df_death)
+#View(g7_df_death)
 ```
 
 ```{r}
 g7_df_death[c("Province/State", "Lat", "Long")] = list(NULL)
 g7_df_death_aggregate <- aggregate(. ~ country, g7_df_death, sum)
-head(g7_df_death_aggregate)
+#head(g7_df_death_aggregate)
 
 ```
 
@@ -171,7 +171,7 @@ g7_df_death_aggregate_pivot <- g7_df_death_aggregate %>%
 
 # Covert the day column to date object
 g7_df_death_aggregate_pivot$date <- as.Date(g7_df_death_aggregate_pivot$date, format="%m/%d/%y")
-head(g7_df_death_aggregate_pivot)
+#head(g7_df_death_aggregate_pivot)
 ```
 
 ```{r fig.width=12, fig.height=4}
@@ -209,7 +209,9 @@ ggplot(df_viz, aes(x = date_interval, y = total_deaths, color = country)) +
   scale_x_date(date_breaks = "3 month", date_labels = "%b %Y")
 ```
 
-#### Visualization With US
+#### Visualization Without US
+
+We can see the the trends are similar around Nov 2020 for all other countries except Japan. We see a exponentially significant rise in cases.
 
 ### Correlation between confirmed and deaths for US
 
@@ -248,10 +250,10 @@ plot +
 ### Correlation between confirmed and deaths for Japan
 
 ```{r fig.width=12, fig.height=4}
-df_us_confirmed <- g7_df_confirmed_aggregate_pivot %>% 
+df_japan_confirmed <- g7_df_confirmed_aggregate_pivot %>% 
   filter(country == "Japan")
 
-df_viz <- df_us_confirmed %>%
+df_viz <- df_japan_confirmed %>%
   group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
   summarise(total_cases = sum(cases, na.rm = TRUE))
 
@@ -265,10 +267,10 @@ plot <- ggplot(df_viz, aes(x = date_interval, y = total_cases, color = "Cases"))
   scale_x_date(date_breaks = "3 month", date_labels = "%b %Y") +
   scale_y_log10()
 
-df_us_death <- g7_df_death_aggregate_pivot %>% 
+df_japan_death <- g7_df_death_aggregate_pivot %>% 
   filter(country == "Japan")
 
-df_viz2 <- df_us_death %>%
+df_viz2 <- df_japan_death %>%
   group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
   summarise(total_deaths = sum(deaths, na.rm = TRUE))
 
@@ -277,3 +279,52 @@ df_viz2$date_interval <- as.Date(as.character(df_viz2$date_interval))
 plot + 
   geom_line(data = df_viz2, aes(x = date_interval, y = total_deaths, color = "Deaths"))
 ```
+
+This is no surprising to see cases and fatality are highly correlated.
+
+## Data Modelling
+
+I will perform a simple ARIMA model. I will use the first 300 days.
+
+```{r}
+df_japan_confirmed <- g7_df_confirmed_aggregate_pivot %>% 
+  filter(country == "Japan")
+
+first_300_days <- df_japan_confirmed[1:300, ]
+View(first_300_days)
+```
+
+```{r}
+library(tseries)
+adf_test <- adf.test(first_300_days$cases)
+print(adf_test)
+
+```
+
+```{r}
+first_300_days$diff_total_cases <- c(NA, diff(first_300_days$cases))
+acf(first_300_days$diff_total_cases, na.action = na.omit)
+pacf(first_300_days$diff_total_cases, na.action = na.omit)
+
+```
+
+```{r}
+library(forecast)
+fit <- auto.arima(first_300_days$cases)
+summary(fit)
+
+```
+
+```{r}
+future_values <- forecast(fit, h = 10)
+plot(future_values)
+lines(df_japan_confirmed[1:310, ]$cases, col = "red")
+```
+
+## Bias
+
+I think we all are familiar with more or less. The main bias in this data is reporting accuracy. I don't think reporting on new cases may not be timely manner as there may be delays in reporting and testing the cases.
+
+To mention the facts that, in early days, testing could not be done effectively. I believe the actual data would have always lagged behind.
+
+In the future, I would integrate more data sources to paint a better picture and to tell a better story. Time series data allow cannot tell the good story.
