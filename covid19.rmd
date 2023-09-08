@@ -208,3 +208,72 @@ ggplot(df_viz, aes(x = date_interval, y = total_deaths, color = country)) +
        y = "Total Deaths") +
   scale_x_date(date_breaks = "3 month", date_labels = "%b %Y")
 ```
+
+#### Visualization With US
+
+### Correlation between confirmed and deaths for US
+
+```{r fig.width=12, fig.height=4}
+df_us_confirmed <- g7_df_confirmed_aggregate_pivot %>% 
+  filter(country == "US")
+
+df_viz <- df_us_confirmed %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_cases = sum(cases, na.rm = TRUE))
+
+df_viz$date_interval <- as.Date(as.character(df_viz$date_interval))
+
+plot <- ggplot(df_viz, aes(x = date_interval, y = total_cases, color = "Cases")) +
+  geom_line() +
+  labs(title = "Total Cases and Deaths over the time",
+       x = "Date",
+       y = "Total Cases") +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y") +
+  scale_y_log10()
+
+df_us_death <- g7_df_death_aggregate_pivot %>% 
+  filter(country == "US")
+
+df_viz2 <- df_us_death %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_deaths = sum(deaths, na.rm = TRUE))
+
+df_viz2$date_interval <- as.Date(as.character(df_viz2$date_interval))
+
+plot + 
+  geom_line(data = df_viz2, aes(x = date_interval, y = total_deaths, color = "Deaths"))
+
+```
+
+### Correlation between confirmed and deaths for Japan
+
+```{r fig.width=12, fig.height=4}
+df_us_confirmed <- g7_df_confirmed_aggregate_pivot %>% 
+  filter(country == "Japan")
+
+df_viz <- df_us_confirmed %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_cases = sum(cases, na.rm = TRUE))
+
+df_viz$date_interval <- as.Date(as.character(df_viz$date_interval))
+
+plot <- ggplot(df_viz, aes(x = date_interval, y = total_cases, color = "Cases")) +
+  geom_line() +
+  labs(title = "Total Cases over the time",
+       x = "Date",
+       y = "Total Cases") +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y") +
+  scale_y_log10()
+
+df_us_death <- g7_df_death_aggregate_pivot %>% 
+  filter(country == "Japan")
+
+df_viz2 <- df_us_death %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_deaths = sum(deaths, na.rm = TRUE))
+
+df_viz2$date_interval <- as.Date(as.character(df_viz2$date_interval))
+
+plot + 
+  geom_line(data = df_viz2, aes(x = date_interval, y = total_deaths, color = "Deaths"))
+```
