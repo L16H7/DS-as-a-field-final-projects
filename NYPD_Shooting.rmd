@@ -4,7 +4,10 @@
 title: "NYPD Shooting Incident Data"
 author: "Lin Myat Ko"
 date: "2023-09-06"
-output: pdf_document
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 ---
 
 ```{r}
@@ -12,6 +15,10 @@ library(tidyverse)
 ```
 
 ## Data Loading
+
+The data that we are using today is from NYPD data from the following data source.
+
+<https://catalog.data.gov/dataset/nypd-shooting-incident-data-historic>
 
 ```{r}
 df <- read_csv("./NYPD/NYPD_Shooting_Incident_Data__Historic_.csv")
@@ -27,7 +34,7 @@ summary(df)
 
 ### 1. Most Risky Hour of the Day
 
-Let's explore the OCCUR TIME. I want to find out which are the riskiest hours. The intuition is it is safer in the daytime at night.
+Analyzing the variable "OCCUR TIME" could provide valuable insights into the temporal patterns of risk, particularly in differentiating the levels of safety between daytime and nighttime hours. In common sense, daytime should be safer than nighttime.
 
 ```{r fig.width=12, fig.height=8}
 breaks_hours <- seq(0, 23, 1)
@@ -46,13 +53,13 @@ ggplot(df, aes(x = hour)) +
 
 ```
 
-So, our intuition is backed by the data.
+From this visualization, we can see that daytime is indeed safer
 
 ### 2. Day of the Week
 
-Next, I want to determine the safest day of the week.
+In similar fashion, let's explore the safest day of the week.
 
-This is going to be tricky because we do not have the day of the week in data. However, we can calculate day of the week from date.
+For this case, we need to convert the day into day of the week.
 
 ```{r fig.width=12, fig.height=8}
 df$weekday <- wday(as.Date(df$OCCUR_DATE, format = "%m/%d/%Y"), label = TRUE)
@@ -69,11 +76,16 @@ ggplot(df, aes(x = weekday)) +
 
 ```
 
-This is interesting to see Wednesday is the safest compared to the weekend.
+This is interesting to see Wednesday is the safest and the weekends are riskiest. Here are the reasons I could think of
+
+1.  There may be increased activities for social gatherings and people go out more.
+2.  Increased alcohol consumption. People may drink more alcohol since it is holiday.
+
+Or it may be because of other causes which I may not realize.
 
 ### 3. Distribution of races
 
-Let us explore the races involved. I will print the statistics.
+Let us explore the races involved.
 
 ```{r fig.width=12, fig.height=8}
 ggplot(df, aes(x = VIC_RACE)) +
@@ -83,6 +95,8 @@ ggplot(df, aes(x = VIC_RACE)) +
        y = "Number") +
   theme_minimal()
 ```
+
+The data may be biased here because of obvious disproportional distributions.
 
 #### The numbers are too different so I will use LOG SCALE to compare victim and **perpetrator** distributions.
 
@@ -105,8 +119,6 @@ ggplot(df, aes(x = PERP_RACE)) +
   scale_y_log10() +
   theme_minimal()
 ```
-
-I cannot help but feel that data is biased.
 
 ### 4. Distributions of Victim Races by District
 
@@ -146,7 +158,7 @@ They all seem to distribute similarly.
 
 ## Modelling
 
-I want to do logistic regression statistical murder flag. I will handpick the features I want to explore.
+I am going to perform logistic regression statistical murder flag. I will handpick the features I want to explore. Here are the features I will use
 
 OCCUR_TIME, PRECINT, PERP_AGE_GROUP, PERP_SEX, PERP_RACE, VIC_AGE_GROUP, VIC_SEX, VIC_RACE
 
@@ -169,13 +181,11 @@ model_df[] <- lapply(model_df, factor)
 table(model_df$STATISTICAL_MURDER_FLAG)
 ```
 
-But the data is imbalanced so, I will sample 3000 from FALSE.
+But the data is imbalanced. Imbalanced datasets are not suitable to use for machine learning modelling. I will sample 3000 from flag TRUE and 3000 from flag FALSE
 
 I will handpick the features I want to explore.
 
 ### Feature Selection
-
-OCCUR_TIME, PRECINT, PERP_AGE_GROUP, PERP_SEX, PERP_RACE, VIC_AGE_GROUP, VIC_SEX, VIC_RACE
 
 ```{r}
 sampled_df <- model_df %>%
@@ -211,4 +221,4 @@ confusionMatrix(as.factor(predicted_labels), as.factor(test$STATISTICAL_MURDER_F
 
 ### Conclusion
 
-So, the model accuracy is bad. So, I think it's safe to conclude that the NYPD determine statistical murder flag by some kinds of private data. In the future, I will research more about how data scientists are looking at this kind of data.
+So, the model accuracy is not optimal. One of the possible reasons could be that the NYPD determine statistical murder flag by some kinds of private data or they use crime scene information which I do not have access. In the future, I will research more about how data scientists are looking at this kind of data and perform which kinds of modelling and data visualization.

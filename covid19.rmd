@@ -44,7 +44,7 @@ I want to draw simple line plots of the aggregate data. The data have provinces 
 
 ```{r}
 g7_df_confirmed[c("Province/State", "Lat", "Long")] = list(NULL)
-g7_df_confirmed_aggregate <- aggregate(. ~ country, g7df, sum)
+g7_df_confirmed_aggregate <- aggregate(. ~ country, g7_df_confirmed, sum)
 
 ```
 
@@ -63,7 +63,7 @@ g7_df_confirmed_aggregate_pivot <- g7_df_confirmed_aggregate %>%
   )
 
 # Covert the day column to date object
-g7_df_confirmed_aggregate_pivot$date <- as.Date(df_long$date, format="%m/%d/%y")
+g7_df_confirmed_aggregate_pivot$date <- as.Date(g7_df_confirmed_aggregate_pivot$date, format="%m/%d/%y")
 head(g7_df_confirmed_aggregate_pivot)
 ```
 
@@ -136,5 +136,75 @@ ggplot(df_moving_avg, aes(x = date, y = cases)) +
 ## Important Deaths global dataset
 
 ```{r}
+df_death = read_csv("./time_series_covid19_deaths_global.csv")
+head(df_death)
 
+```
+
+Again, we will looking only at the G7 countries.
+
+```{r}
+selected_countries <- c("Canada", "France", "Germany", "Italy", "Japan", "United Kingdom", "US")
+
+# Filtering the data by selected countries
+g7_df_death <- df_death %>% filter(`Country/Region` %in% selected_countries)
+
+g7_df_death <- g7_df_death %>% rename(country = `Country/Region`)
+head(g7_df_death)
+View(g7_df_death)
+```
+
+```{r}
+g7_df_death[c("Province/State", "Lat", "Long")] = list(NULL)
+g7_df_death_aggregate <- aggregate(. ~ country, g7_df_death, sum)
+head(g7_df_death_aggregate)
+
+```
+
+```{r}
+g7_df_death_aggregate_pivot <- g7_df_death_aggregate %>%
+  pivot_longer(
+    cols = -country,
+    names_to = "date",
+    values_to = "deaths"
+  )
+
+# Covert the day column to date object
+g7_df_death_aggregate_pivot$date <- as.Date(g7_df_death_aggregate_pivot$date, format="%m/%d/%y")
+head(g7_df_death_aggregate_pivot)
+```
+
+```{r fig.width=12, fig.height=4}
+df_viz <- g7_df_death_aggregate_pivot %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_deaths = sum(deaths, na.rm = TRUE))
+
+df_viz$date_interval <- as.Date(as.character(df_viz$date_interval))
+
+ggplot(df_viz, aes(x = date_interval, y = total_deaths, color = country)) +
+  geom_line() +
+  labs(title = "Total Death over the time",
+       x = "Date",
+       y = "Total Deaths") +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y")
+```
+
+#### US data is much more than other countries. From this visualization, we might assume that other countries can keep fatality under control. So, we will plot with US to see the real trends.
+
+```{r fig.width=12, fig.height=4}
+df_without_us <- g7_df_death_aggregate_pivot %>% 
+  filter(country != "US")
+
+df_viz <- df_without_us %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_deaths = sum(deaths, na.rm = TRUE))
+
+df_viz$date_interval <- as.Date(as.character(df_viz$date_interval))
+
+ggplot(df_viz, aes(x = date_interval, y = total_deaths, color = country)) +
+  geom_line() +
+  labs(title = "Total Death over the time",
+       x = "Date",
+       y = "Total Deaths") +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y")
 ```
