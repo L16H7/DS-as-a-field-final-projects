@@ -1,0 +1,140 @@
+# Covid 19 Data Visualization
+
+---
+title: "Covid_19"
+author: "Lin Myat Ko"
+date: "2023-09-07"
+output: pdf_document
+---
+
+## Importing Libraries
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(zoo)
+```
+
+## Data Loading
+
+We received the data from COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University.
+
+Here is the link for the data. <https://github.com/CSSEGISandData/COVID-19>
+
+```{r}
+df_confirmed = read_csv("./time_series_covid19_confirmed_global.csv")
+head(df_confirmed)
+```
+
+## Data Visualization
+
+The data contains many countries. So, to present the data effectively, I will select a few countries to visualize. I want to compare the G7 countries.
+
+```{r}
+selected_countries <- c("Canada", "France", "Germany", "Italy", "Japan", "United Kingdom", "US")
+
+# Filtering the data by selected countries
+g7_df_confirmed <- df_confirmed %>% filter(`Country/Region` %in% selected_countries)
+
+g7_df_confirmed <- g7_df_confirmed %>% rename(country = `Country/Region`)
+
+```
+
+I want to draw simple line plots of the aggregate data. The data have provinces and states but I am more interested to see the country as a whole to compare with other countries. In order to do that, we first need to aggregate the cases by the country name. Before we aggregate, we will drop columns for "Province/State", "Lat", "Long" since they are not going to be useful for our first visualization.
+
+```{r}
+g7_df_confirmed[c("Province/State", "Lat", "Long")] = list(NULL)
+g7_df_confirmed_aggregate <- aggregate(. ~ country, g7df, sum)
+
+```
+
+```{r}
+head(g7_df_confirmed_aggregate)
+```
+
+Create pivot to be visualized as line plot
+
+```{r}
+g7_df_confirmed_aggregate_pivot <- g7_df_confirmed_aggregate %>%
+  pivot_longer(
+    cols = -country,
+    names_to = "date",
+    values_to = "cases"
+  )
+
+# Covert the day column to date object
+g7_df_confirmed_aggregate_pivot$date <- as.Date(df_long$date, format="%m/%d/%y")
+head(g7_df_confirmed_aggregate_pivot)
+```
+
+```{r fig.width=12, fig.height=4}
+df_viz <- g7_df_confirmed_aggregate_pivot %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_cases = sum(cases, na.rm = TRUE))
+
+df_viz$date_interval <- as.Date(as.character(df_viz$date_interval))
+
+ggplot(df_viz, aes(x = date_interval, y = total_cases, color = country)) +
+  geom_line() +
+  labs(title = "Total Cases over the time",
+       x = "Date",
+       y = "Total Cases") +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y")
+```
+
+Infectious diseases spread by exponential rate. So, let's try to visualize with log scale.
+
+```{r fig.width=12, fig.height=4}
+df_viz <- g7_df_confirmed_aggregate_pivot %>%
+  group_by(country, date_interval = cut.Date(date, breaks = "10 day")) %>%
+  summarise(total_cases = sum(cases, na.rm = TRUE))
+
+df_viz$date_interval <- as.Date(as.character(df_viz$date_interval))
+
+ggplot(df_viz, aes(x = date_interval, y = total_cases, color = country)) +
+  geom_line() +
+  labs(title = "Total Cases over the time",
+       x = "Date",
+       y = "Total Cases") +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y") +
+  scale_y_log10()
+```
+
+### Out of the G7, Japan had a significant rise in confirmed cases starting from Feb 2022.
+
+## Moving Average Plot for Japan
+
+I want to do moving averages to see if there is something interesting in the data.
+
+```{r fig.width=20, fig.height=12}
+df_japan <- g7_df_confirmed_aggregate_pivot %>% 
+  filter(country == "Japan")
+
+# Sort and calculate moving averages
+df_moving_avg <- df_japan %>%
+  arrange(date) %>%
+  mutate(
+    moving_avg_7day = rollmean(cases, 7, align = "right", fill = NA),
+    moving_avg_30day = rollmean(cases, 30, align = "right", fill = NA),
+    moving_avg_100day = rollmean(cases, 100, align = "right", fill = NA)
+  )
+
+# Create the plot
+ggplot(df_moving_avg, aes(x = date, y = cases)) +
+  geom_line(aes(color = "Actual"), alpha = 0.5) +
+  geom_line(aes(y = moving_avg_7day, color = "7-day MA")) +
+  geom_line(aes(y = moving_avg_30day, color = "30-day MA")) +
+  geom_line(aes(y = moving_avg_100day, color = "100-day MA")) +
+  scale_color_manual(values = c("Actual" = "black", "7-day MA" = "red", "30-day MA" = "green", "100-day MA" = "blue")) +
+  labs(title = "Cases and Moving Averages for ABC",
+       x = "Date",
+       y = "Cases",
+       color = "Legend") +
+  scale_x_date(date_breaks = "3 month", date_labels = "%b %Y")
+```
+
+## Important Deaths global dataset
+
+```{r}
+
+```
